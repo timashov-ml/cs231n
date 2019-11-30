@@ -197,14 +197,25 @@ def batchnorm_forward(x, gamma, beta, bn_param):
         # might prove to be helpful.                                          #
         #######################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-        sample_mean = np.mean(x, axis = 0)
-        sample_var = np.var(x, axis = 0)
-        x_ = (x - sample_mean.reshape(1, -1)) / np.sqrt(sample_var + eps).reshape(1, -1)
-        out = gamma * x_ + beta
         
+        # 1. sample mean and variance
+        sample_mean = np.mean(x, axis = 0)
+        sample_var = np.mean((x - sample_mean) ** 2, axis = 0) # np.var(x, axis = 0)
+        
+        # 2. standart deviation
+        std = np.sqrt(sample_var + eps)
+        
+        # 3. normalization
+        x_normed = (x - sample_mean) / std # .reshape(1, -1) <- is not necessary
+        
+        # 4. rescale and shift
+        out = gamma * x_normed + beta
+        
+        # 5. cache and running statistics (for test)
         running_mean = momentum * running_mean + (1 - momentum) * sample_mean
         running_var = momentum * running_var + (1 - momentum) * sample_var
-
+        cache = x, x_normed, gamma, beta, eps, sample_mean, sample_var
+        
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         #######################################################################
         #                           END OF YOUR CODE                          #
@@ -218,13 +229,9 @@ def batchnorm_forward(x, gamma, beta, bn_param):
         #######################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        running_mean = momentum * running_mean + (1 - momentum) * sample_mean
-        running_var = momentum * running_var + (1 - momentum) * sample_var
-        
-        x_ = (x - running_mean.reshape(1, -1)) / np.sqrt(running_var + eps).reshape(1, -1)
-        out = gamma * x_ + beta
-        
-        
+        running_std = np.sqrt(running_var + eps)
+        x_normed = (x - running_mean) / running_std
+        out = gamma * x_normed + beta
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         #######################################################################
@@ -257,6 +264,7 @@ def batchnorm_backward(dout, cache):
     - dgamma: Gradient with respect to scale parameter gamma, of shape (D,)
     - dbeta: Gradient with respect to shift parameter beta, of shape (D,)
     """
+
     dx, dgamma, dbeta = None, None, None
     ###########################################################################
     # TODO: Implement the backward pass for batch normalization. Store the    #
@@ -266,8 +274,18 @@ def batchnorm_backward(dout, cache):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
-
+    x, x_normed, gamma, beta, eps, mean, var = cache
+    M, D = x.shape    
+    
+    dx_normed = dout * gamma
+    dvar = np.sum(dx_normed * (x - mean.reshape(1, -1)) * ((var + eps)**(-1.5)).reshape(1, -1) / (-2), axis = 0)
+    dmean = np.sum(- dx_normed / np.sqrt(var + eps).reshape(1, -1), axis = 0)
+    dmean += 2 * dvar * np.sum(mean.reshape(1, -1) - x, axis = 0) / M
+    
+    dx = dx_normed / ((var + eps)**0.5).reshape(1, -1) 
+    dx += 2 * dvar.reshape(1, -1) * (x - mean.reshape(1, -1)) / M + dmean / M
+    dgamma = np.sum(dout * x_normed, axis = 0)
+    dbeta = np.sum(dout, axis = 0)
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
     #                             END OF YOUR CODE                            #
@@ -301,8 +319,18 @@ def batchnorm_backward_alt(dout, cache):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
-
+    # 1. unpack cache
+    x, x_normed, gamma, beta, eps, mean, var = cache
+    M, D = x.shape
+    
+    # 2. get simple derivatives
+    dgamma = np.sum(dout * x_normed, axis = 0)
+    dbeta = np.sum(dout, axis = 0)
+    
+    # 3. get derivative out of x (dx)
+    dx = M * dout - np.sum(dout, axis = 0) - ((x - mean) / (var + eps)) * np.sum(dout * (x - mean), axis = 0)
+    dx *= (1 / M) * gamma * (var + eps)**(-1/2)
+    
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
     #                             END OF YOUR CODE                            #
