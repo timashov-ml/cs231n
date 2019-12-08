@@ -200,7 +200,7 @@ class FullyConnectedNet(object):
             b = np.zeros(all_dims[i])
             self.params['W{}'.format(i)] = w
             self.params['b{}'.format(i)] = b
-            if self.normalization == 'batchnorm' and i != self.num_layers:
+            if self.normalization in ['batchnorm', 'layernorm'] and i != self.num_layers:
                 self.params['gamma{}'.format(i)] = np.ones(all_dims[i])
                 self.params['beta{}'.format(i)] = np.zeros(all_dims[i])
                 
@@ -235,7 +235,7 @@ class FullyConnectedNet(object):
             self.params[k] = v.astype(dtype)
 
 
-    def loss(self, X, y=None):
+    def loss(self, X, y = None):
         """
         Compute loss and gradient for the fully-connected net.
 
@@ -274,24 +274,30 @@ class FullyConnectedNet(object):
             W, b = self.params['W{}'.format(i)], self.params['b{}'.format(i)]
             # 1. fully connected forward
             a, fc_cache = affine_forward(l[i - 1], W, b)
+            
             # 2. <batch normalization forward> if it's necessary
             bn_cache = None
             if self.normalization == 'batchnorm':
                 gamma = self.params['gamma{}'.format(i)]
                 beta = self.params['beta{}'.format(i)]
                 a, bn_cache = batchnorm_forward(a, gamma, beta, self.bn_params[i - 1]) # out, cache
+            elif self.normalization == 'layernorm':
+                gamma = self.params['gamma{}'.format(i)]
+                beta = self.params['beta{}'.format(i)]
+                a, bn_cache = layernorm_forward(a, gamma, beta, self.bn_params[i - 1])
             # 3. relu forward
             l[i], relu_cache = relu_forward(a)
-            l_cache[i] = (fc_cache, bn_cache, relu_cache)
-#             hidden, cache = affine_forward(hidden, W, b)
-#             caches['affine_{}'.format(i)] = cache
-#             hidden, cache = relu_forward(hidden)
-#             caches['relu_{}'.format(i)] = cache
-#             l[i], l_cache[i] = affine_relu_forward(l[i - 1], W, b) 
+            
+            # 4. <dropout forward>
+            dout_cache = None
+            if self.use_dropout:
+                l[i], dout_cache = dropout_forward(l[i], self.dropout_param)
+            # 5. cache everything
+            l_cache[i] = (fc_cache, bn_cache, relu_cache, dout_cache)
+            
             
  
         W, b = self.params['W{}'.format(self.num_layers)], self.params['b{}'.format(self.num_layers)]
-#         scores_scores_cache, cache = affine_forward(hidden, W, b)
         scores, scores_cache = affine_forward(l[i], W, b)
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
@@ -330,15 +336,24 @@ class FullyConnectedNet(object):
 
         # backward pass through hidden layers
         for i in range(self.num_layers - 1, 0, -1):
-            fc_cache, bn_cache, relu_cache = l_cache[i]
-            # 1. relu backward
+            # 0. getting cache
+            fc_cache, bn_cache, relu_cache, dout_cache = l_cache[i]
+            
+            # 1. <dropout backward> if it's necessary
+            if self.use_dropout:
+                da = dropout_backward(da, dout_cache)
+            # 2. relu backward
             da = relu_backward(da, relu_cache)
-            # 2. <batch normalization backward> if it's necessary
+            # 3. <batch normalization backward> if it's necessary
             if self.normalization == 'batchnorm':
                 da, dgamma, dbeta = batchnorm_backward(da, bn_cache)  
                 grads['gamma{}'.format(i)] = dgamma
                 grads['beta{}'.format(i)] = dbeta
-            # 3. fully connected backward
+            elif self.normalization == 'layernorm':
+                da, dgamma, dbeta = layernorm_backward(da, bn_cache)  
+                grads['gamma{}'.format(i)] = dgamma
+                grads['beta{}'.format(i)] = dbeta
+            # 4. fully connected backward
             da, dw, db = affine_backward(da, fc_cache)
             
 #             dloss_dh, dloss_dw, dloss_db = affine_relu_backward(dloss_dh, l_cache[i])
