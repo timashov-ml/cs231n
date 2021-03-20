@@ -78,7 +78,7 @@ google-pasta==0.1.5
 grpcio==1.20.0
 h5py==2.9.0
 imageio==2.5.0
-Jinja2==2.10.1 # diff version
+Jinja2==2.11.3 # diff version
 Keras==2.2.4
 Keras-Applications==1.0.7
 Keras-Preprocessing==1.0.9
