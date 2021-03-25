@@ -88,7 +88,7 @@ parso==0.4.0 # diff version
 pexpect==4.7.0 # diff version
 protobuf==3.7.1
 pyparsing==2.4.0 # diff version
-PyYAML==5.1
+PyYAML==5.4
 # Add this line if you want GPU support for tensorflow!
 tensorflow-gpu==2.0.0a0
 # Add this line if you DON'T want GPU support for tensorflow!
